@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
 *
 * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
 *
@@ -598,7 +598,7 @@ int wlan_log_to_user(VOS_TRACE_LEVEL log_level, char *to_be_sent, int length)
 	local_time = (u32)(tv.tv_sec - (sys_tz.tz_minuteswest * 60));
 	rtc_time_to_tm(local_time, &tm);
         /* Firmware Time Stamp */
-        qtimer_ticks =  __vos_get_log_timestamp();
+        qtimer_ticks =  arch_counter_get_cntpct();
 
         tlen = snprintf(tbuf, sizeof(tbuf), "[%02d:%02d:%02d.%06lu] [%016llX]"
                         " [%.5s] ", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec,
@@ -1242,17 +1242,14 @@ static int wlan_logging_thread(void *Arg)
 				 * memdump complete. If it's null,then something is
 				 * not right.
 				 */
-				if (gwlan_logging.fw_mem_dump_ctx.svc_fw_mem_dump_req_cb &&
-				    gwlan_logging.fw_mem_dump_ctx.svc_fw_mem_dump_req_cb_arg) {
+				if (gwlan_logging.fw_mem_dump_ctx.svc_fw_mem_dump_req_cb) {
 					((hdd_fw_mem_dump_req_cb)
 					gwlan_logging.fw_mem_dump_ctx.svc_fw_mem_dump_req_cb)(
-					(struct hdd_fw_mem_dump_req_ctx*)
 					gwlan_logging.fw_mem_dump_ctx.svc_fw_mem_dump_req_cb_arg);
 
 					/*invalidate the callback pointers*/
 					spin_lock_irqsave(&gwlan_logging.fw_mem_dump_ctx.fw_mem_dump_lock,flags);
 					gwlan_logging.fw_mem_dump_ctx.svc_fw_mem_dump_req_cb = NULL;
-					gwlan_logging.fw_mem_dump_ctx.svc_fw_mem_dump_req_cb_arg = NULL;
 					spin_unlock_irqrestore(&gwlan_logging.fw_mem_dump_ctx.fw_mem_dump_lock,flags);
 				}
 		}
@@ -1410,7 +1407,6 @@ int wlan_logging_sock_activate_svc(int log_fe_to_console, int num_buf,
 	int i, j = 0;
 	unsigned long irq_flag;
 	bool failure = FALSE;
-	struct log_msg *temp;
 
 	pr_info("%s: Initalizing FEConsoleLog = %d NumBuff = %d\n",
 			__func__, log_fe_to_console, num_buf);
@@ -1502,12 +1498,10 @@ err:
 		pr_err("%s: Could not Create LogMsg Thread Controller",
 		       __func__);
 		spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
-		temp = gplog_msg;
+		vfree(gplog_msg);
 		gplog_msg = NULL;
 		gwlan_logging.pcur_node = NULL;
 		spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
-		vfree(temp);
-		temp = NULL;
 		return -ENOMEM;
 	}
 	wake_up_process(gwlan_logging.thread);
@@ -1569,7 +1563,6 @@ int wlan_logging_sock_deactivate_svc(void)
 {
 	unsigned long irq_flag;
 	int i;
-	struct log_msg *temp;
 
 	if (!gplog_msg)
 		return 0;
@@ -1586,12 +1579,10 @@ int wlan_logging_sock_deactivate_svc(void)
 	wait_for_completion(&gwlan_logging.shutdown_comp);
 
 	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
-	temp = gplog_msg;
+	vfree(gplog_msg);
 	gplog_msg = NULL;
 	gwlan_logging.pcur_node = NULL;
 	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
-	vfree(temp);
-	temp = NULL;
 
 	spin_lock_irqsave(&gwlan_logging.pkt_stats_lock, irq_flag);
 	/* free allocated skb */
