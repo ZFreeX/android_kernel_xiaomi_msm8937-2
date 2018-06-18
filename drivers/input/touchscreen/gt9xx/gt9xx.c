@@ -2407,7 +2407,7 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
 		GTP_ERROR("%s: sysfs_create_version_file failed\n", __func__);
 	}
 	
-	gtp_proc_init(client->goodix_gesture_kobj.sd);
+	gtp_proc_init(client->dev.kobj.sd);
 #endif
 
 #if GTP_ESD_PROTECT
